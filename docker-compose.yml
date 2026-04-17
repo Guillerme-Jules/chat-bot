@@ -1,0 +1,56 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: cohyg-ollama
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+    restart: unless-stopped
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: cohyg-webui
+    ports:
+      - "${WEBUI_PORT:-3000}:8080"
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - WEBUI_AUTH=${WEBUI_AUTH:-false}
+      - ENABLE_SIGNUP=${ENABLE_SIGNUP:-false}
+      - DEFAULT_LOCALE=fr
+      - ENABLE_RAG_WEB_SEARCH=false
+    volumes:
+      - openwebui_data:/app/backend/data
+      - ./doc:/data/docs
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: cohyg-init
+    depends_on:
+      - ollama
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Attente du démarrage d Ollama..."
+        until ollama list > /dev/null 2>&1; do sleep 2; done
+        echo "=== Téléchargement du modèle de langage ==="
+        ollama pull llama3.2:3b
+        echo "=== Téléchargement du modèle d embeddings ==="
+        ollama pull nomic-embed-text
+        echo "=== Vérification des modèles ==="
+        ollama list
+        echo "=== Initialisation terminée ==="
+    environment:
+      - OLLAMA_HOST=ollama:11434
+    restart: "no"
+
+volumes:
+  ollama_data:
+    name: cohyg_ollama_data
+  openwebui_data:
+    name: cohyg_openwebui_data
